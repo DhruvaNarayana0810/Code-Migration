@@ -1,0 +1,21 @@
+# Code Archaeologist: Universal Edition v2.0
+# Install with: pip install -r requirements.txt
+
+# Core
+gitpython>=3.1.40
+
+# AST parsing — multi-language Tree-Sitter grammars (pre-built)
+tree-sitter>=0.25.0
+tree-sitter-languages>=1.10.2
+
+# Graph database
+neo4j>=5.0.0
+
+# LLM
+ollama # new SDK, google-generativeai is deprecated
+
+# Utilities
+tqdm>=4.66.0
+python-dotenv>=1.0.0
+fastapi
+uvicorn
