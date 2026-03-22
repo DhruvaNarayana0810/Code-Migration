@@ -148,6 +148,8 @@ class Archaeologist:
             entities = self._extract_entities(tree, content, sf, language_obj)
         else:
             # Fallback: treat whole file as one entity
+            # Try to extract imports using regex
+            imports_raw = self._extract_imports_fallback(content, sf.language)
             entities = [{
                 "id": str(sf.path),
                 "name": sf.path.stem,
@@ -155,7 +157,7 @@ class Archaeologist:
                 "body": content[:2000],
                 "language": sf.language,
                 "file": str(sf.path),
-                "imports": [],
+                "imports": imports_raw,
             }]
 
         # Write to Neo4j
@@ -223,6 +225,25 @@ class Archaeologist:
             })
 
         return entities
+
+    def _extract_imports_fallback(self, content: str, language: str) -> List[str]:
+        """Fallback import extraction using regex when Tree-Sitter fails."""
+        import re
+        imports = []
+        if language == "python":
+            # Match import statements
+            import_patterns = [
+                r'^\s*import\s+(.+)$',
+                r'^\s*from\s+(.+)\s+import\s+(.+)$'
+            ]
+            for line in content.split('\n'):
+                for pattern in import_patterns:
+                    match = re.match(pattern, line.strip())
+                    if match:
+                        imports.append(line.strip())
+                        break
+        # Add other languages if needed
+        return imports
 
     def _build_dependency_edges(self):
         """
