@@ -20,8 +20,6 @@ logger = logging.getLogger("Archaeologist")
 
 # ── Tree-Sitter query patterns per grammar ──────────────────────────────────
 
-# Each grammar maps to a list of (node_type, name_child_field) tuples
-# for extracting top-level entities.
 ENTITY_QUERIES: Dict[str, str] = {
     "python": """
         (function_definition name: (identifier) @name) @entity
@@ -85,9 +83,11 @@ class Archaeologist:
     def __init__(self, config):
         self.config = config
         self.driver = GraphDatabase.driver(
-        "bolt://127.0.0.1:7687",
-        auth=("neo4j", "omnamahshivaya")
-    )
+            "bolt://127.0.0.1:7687",
+            auth=("neo4j", "omnamahshivaya"),
+            max_connection_pool_size=5,
+            connection_timeout=30,
+        )
         self._init_schema()
         self._parsers: Dict[str, Any] = {}
 
@@ -147,8 +147,6 @@ class Archaeologist:
             tree = parser.parse(bytes(content, "utf-8"))
             entities = self._extract_entities(tree, content, sf, language_obj)
         else:
-            # Fallback: treat whole file as one entity
-            # Try to extract imports using regex
             imports_raw = self._extract_imports_fallback(content, sf.language)
             entities = [{
                 "id": str(sf.path),
@@ -160,7 +158,6 @@ class Archaeologist:
                 "imports": imports_raw,
             }]
 
-        # Write to Neo4j
         with self.driver.session() as session:
             for entity in entities:
                 session.run("""
@@ -199,20 +196,18 @@ class Archaeologist:
                 continue
 
             if capture_name in ("entity", "name"):
-                # Build entity ID as file_path::name
                 name = node_text[:200].strip().split("\n")[0]
                 entity_id = f"{sf.path}::{name}"
                 entities.append({
                     "id": entity_id,
                     "name": name,
                     "type": node.type,
-                    "body": node_text[:4000],  # cap body size
+                    "body": node_text[:4000],
                     "language": sf.language,
                     "file": str(sf.path),
                     "imports": imports_raw,
                 })
 
-        # If no named entities found, store the whole file
         if not entities:
             entities.append({
                 "id": str(sf.path),
@@ -231,7 +226,6 @@ class Archaeologist:
         import re
         imports = []
         if language == "python":
-            # Match import statements
             import_patterns = [
                 r'^\s*import\s+(.+)$',
                 r'^\s*from\s+(.+)\s+import\s+(.+)$'
@@ -242,7 +236,6 @@ class Archaeologist:
                     if match:
                         imports.append(line.strip())
                         break
-        # Add other languages if needed
         return imports
 
     def _build_dependency_edges(self):
@@ -252,15 +245,12 @@ class Archaeologist:
         """
         logger.info("  Building DEPENDS_ON edges (Context Collector)...")
         with self.driver.session() as session:
-            # For each entity, check if any other entity's name appears in its imports
             session.run("""
                 MATCH (a:Entity), (b:Entity)
                 WHERE a <> b
                   AND any(imp IN a.imports WHERE imp CONTAINS b.name)
                 MERGE (a)-[:DEPENDS_ON]->(b)
             """)
-
-            # Also link files that import other files (same-project imports)
             session.run("""
                 MATCH (a:Entity), (b:Entity)
                 WHERE a.file <> b.file
@@ -272,10 +262,6 @@ class Archaeologist:
     # ── Graph-RAG Retrieval ───────────────────────────────────────────────────
 
     def get_context_for_entity(self, entity_id: str, depth: int = 2) -> List[Dict]:
-        """
-        Context Collector: Retrieve an entity and its transitive dependencies
-        up to `depth` hops. Returns list of entity dicts for LLM prompt assembly.
-        """
         with self.driver.session() as session:
             result = session.run("""
                 MATCH path = (e:Entity {id: $id})-[:DEPENDS_ON*0..%d]->(dep:Entity)
@@ -285,7 +271,6 @@ class Archaeologist:
             return [dict(r) for r in result]
 
     def get_all_entities(self) -> List[Dict]:
-        """Return all entities ordered by file (for sequential migration)."""
         with self.driver.session() as session:
             result = session.run("""
                 MATCH (e:Entity)
@@ -297,7 +282,6 @@ class Archaeologist:
             return [dict(r) for r in result]
 
     def get_file_entities(self, file_path: str) -> List[Dict]:
-        """Return all entities from a specific file."""
         with self.driver.session() as session:
             result = session.run("""
                 MATCH (e:Entity {file: $file})

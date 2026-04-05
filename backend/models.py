@@ -2,7 +2,7 @@
 backend/models.py — Pydantic request/response schemas
 """
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel
 
 
@@ -14,6 +14,10 @@ class AnalyzeRequest(BaseModel):
 
 class MigrateRequest(BaseModel):
     path: str
+    target_language: str
+
+
+class AnalyzeMigrationRequest(BaseModel):
     target_language: str
 
 
@@ -54,9 +58,22 @@ class MigratedFile(BaseModel):
     code: str
 
 
+class AnalyzeMigrationResponse(BaseModel):
+    metrics: Dict
+    analysis: str
+
+
 class MigrateResponse(BaseModel):
     files: List[MigratedFile]
     parity: str               # "PASS" | "FAIL" | "SKIP"
     confidence_score: float
     execution_time_ms: int
     files_migrated: int
+
+
+class EntityInfoResponse(BaseModel):
+    name: str
+    summary: str
+    dependencies: List[str]
+    impact: str
+    risk: str

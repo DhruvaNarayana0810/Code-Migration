@@ -12,7 +12,12 @@ logger = logging.getLogger("GraphService")
 
 class GraphService:
     def __init__(self, uri: str, user: str, password: str):
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+        self.driver = GraphDatabase.driver(
+            uri,
+            auth=(user, password),
+            max_connection_pool_size=5,
+            connection_timeout=30,
+        )
 
     def close(self):
         self.driver.close()
@@ -89,3 +94,61 @@ class GraphService:
         with self.driver.session() as session:
             session.run("MATCH (e:Entity) DETACH DELETE e")
         logger.info("Graph cleared.")
+
+    def get_entity_by_name(self, name: str) -> dict:
+        """Fetch a single entity by name."""
+        with self.driver.session() as session:
+            result = session.run("""
+                MATCH (e:Entity {name: $name})
+                RETURN e.id AS id, e.name AS name, e.type AS type,
+                       e.body AS body, e.language AS language, e.file AS file
+                LIMIT 1
+            """, name=name)
+            record = result.single()
+            return dict(record) if record else None
+
+    def get_entity_dependencies(self, name: str) -> list:
+        """Fetch direct dependencies of an entity by name."""
+        with self.driver.session() as session:
+            result = session.run("""
+                MATCH (e:Entity {name: $name})-[:DEPENDS_ON]->(dep:Entity)
+                RETURN dep.name AS name, dep.type AS type
+            """, name=name)
+            return [dict(r) for r in result]
+
+    def get_dependency_count(self) -> int:
+        """Return total number of DEPENDS_ON edges."""
+        with self.driver.session() as session:
+            result = session.run("MATCH ()-[r:DEPENDS_ON]->() RETURN count(r) AS count")
+            return result.single()["count"]
+
+    def get_entity_by_name(self, name: str) -> dict:
+        """Fetch a single entity by name."""
+        with self.driver.session() as session:
+            result = session.run("""
+                MATCH (e:Entity {name: $name})
+                RETURN e.id AS id, e.name AS name, e.type AS type,
+                       e.body AS body, e.language AS language, e.file AS file
+                LIMIT 1
+            """, name=name)
+            record = result.single()
+            return dict(record) if record else None
+
+    def get_entity_dependencies(self, name: str) -> list:
+        """Fetch direct dependencies of an entity by name."""
+        with self.driver.session() as session:
+            result = session.run("""
+                MATCH (e:Entity {name: $name})-[:DEPENDS_ON]->(dep:Entity)
+                RETURN dep.name AS name, dep.type AS type
+            """, name=name)
+            return [dict(r) for r in result]
+
+    def get_all_entities_raw(self) -> list:
+        """Return all entities with body for scoring."""
+        with self.driver.session() as session:
+            result = session.run("""
+                MATCH (e:Entity)
+                RETURN e.id AS id, e.name AS name, e.type AS type,
+                       e.body AS body, e.file AS file, e.language AS language
+            """)
+            return [dict(r) for r in result]

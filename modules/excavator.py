@@ -21,6 +21,12 @@ SKIP_DIRS = {
     "dist", "build", "target", ".idea", ".vscode", "vendor", "third_party",
 }
 
+# Files that are config/packaging/docs — no meaningful code to translate
+SKIP_FILES = {
+    "conf.py", "setup.py", "setup.cfg", "manage.py", "wsgi.py", "asgi.py",
+    "conftest.py", "Makefile", "makefile",
+}
+
 
 class SourceFile:
     """Represents a discovered source file."""
@@ -57,6 +63,18 @@ class Excavator:
         logger.info(f"Discovered {len(files)} source files in {self.repo_dir}")
         return files
 
+    def _safe_rmtree(self, path: Path) -> None:
+        """Remove a directory tree safely on Windows, fixing permissions if needed."""
+        def onerror(func, file_path, exc_info):
+            import stat
+            if not os.access(file_path, os.W_OK):
+                os.chmod(file_path, stat.S_IWUSR)
+                func(file_path)
+            else:
+                raise
+
+        shutil.rmtree(path, onerror=onerror)
+
     def _resolve_repo(self) -> Path:
         """Clone remote repo or validate local path."""
         repo = self.config.repo
@@ -64,7 +82,22 @@ class Excavator:
         if repo.startswith("http://") or repo.startswith("https://") or repo.startswith("git@"):
             dest = self.config.work_dir / "repo"
             if dest.exists():
-                logger.info(f"Repo already cloned at {dest}, reusing.")
+                try:
+                    existing = git.Repo(dest)
+                    current_remote = existing.remotes.origin.url if existing.remotes and existing.remotes.origin else None
+                    if current_remote != repo:
+                        logger.info(
+                            f"Existing clone at {dest} is for {current_remote}; removing and recloning {repo}."
+                        )
+                        self._safe_rmtree(dest)
+                        git.Repo.clone_from(repo, dest, depth=1)
+                    else:
+                        logger.info(f"Repo already cloned at {dest}, reusing.")
+                except (git.exc.InvalidGitRepositoryError, PermissionError, OSError) as exc:
+                    logger.warning(f"Could not reuse existing clone at {dest}: {exc}")
+                    logger.info(f"Removing {dest} and recloning {repo}.")
+                    self._safe_rmtree(dest)
+                    git.Repo.clone_from(repo, dest, depth=1)
             else:
                 logger.info(f"Cloning {repo} → {dest}")
                 git.Repo.clone_from(repo, dest, depth=1)  # shallow clone saves RAM
@@ -85,8 +118,19 @@ class Excavator:
 
             for fname in filenames:
                 fpath = Path(dirpath) / fname
-                if fname == "__init__.py" and fpath.stat().st_size < 500:
+
+                # Skip non-translatable config/packaging files
+                if fname in SKIP_FILES:
                     continue
+
+                # Skip small __init__.py files (package markers)
+                if fname == "__init__.py":
+                    try:
+                        if fpath.stat().st_size < 500:
+                            continue
+                    except Exception:
+                        continue
+
                 ext = fpath.suffix.lower()
 
                 if ext in ext_map:

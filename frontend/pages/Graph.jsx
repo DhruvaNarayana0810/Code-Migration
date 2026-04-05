@@ -12,7 +12,7 @@ export default function Graph() {
           <h1 style={styles.title}>Dependency Graph</h1>
           <p style={styles.sub}>
             Entity relationships extracted from your repository and stored in Neo4j.
-            Click any node to explore its connections.
+            Hover over any node to see its function summary and risk level.
           </p>
         </div>
         {analyzeResult && (
@@ -33,9 +33,11 @@ export default function Graph() {
       )}
 
       {analyzeResult && (
-        <div style={styles.graphCard}>
-          <DependencyGraph key={graphKey} />
-        </div>
+        <>
+          <div style={styles.graphCard}>
+            <DependencyGraph key={graphKey} />
+          </div>
+        </>
       )}
 
       {analyzeResult && (
@@ -49,15 +51,15 @@ export default function Graph() {
 }
 
 const styles = {
-  page: { padding: "60px 64px", animation: "fadeUp 0.4s ease" },
-  header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, marginBottom: 40, flexWrap: "wrap" },
+  page: { padding: "60px 64px", animation: "fadeUp 0.4s ease", display: "flex", flexDirection: "column", gap: 24 },
+  header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 24, flexWrap: "wrap" },
   eyebrow: { fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", color: "#b5692a", textTransform: "uppercase", marginBottom: 10, fontFamily: "'DM Mono', monospace" },
   title: { fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 40, color: "#2a2420", marginBottom: 14, lineHeight: 1.1 },
-  sub: { fontSize: 15, color: "#6b5f54", lineHeight: 1.7, maxWidth: 480, fontWeight: 300 },
+  sub: { fontSize: 15, color: "#6b5f54", lineHeight: 1.7, maxWidth: 500, fontWeight: 300 },
   badge: { background: "#fff", border: "1px solid #e0d8cc", borderRadius: 14, padding: "20px 28px", textAlign: "center", flexShrink: 0 },
   badgeNum: { display: "block", fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 40, color: "#b5692a", lineHeight: 1 },
   badgeLabel: { fontSize: 12, color: "#9a8f82", fontWeight: 500, letterSpacing: "0.06em" },
-  graphCard: { background: "#fff", border: "1px solid #e0d8cc", borderRadius: 16, overflow: "hidden", boxShadow: "0 4px 24px rgba(42,36,32,0.07)", marginBottom: 32 },
+  graphCard: { background: "#fff", border: "1px solid #e0d8cc", borderRadius: 16, overflow: "hidden", boxShadow: "0 4px 24px rgba(42,36,32,0.07)" },
   empty: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: "80px 0", textAlign: "center" },
   emptyIcon: { fontSize: 48, color: "#c4b99a" },
   emptyTitle: { fontFamily: "'Playfair Display', serif", fontSize: 24, color: "#2a2420", fontWeight: 600 },
